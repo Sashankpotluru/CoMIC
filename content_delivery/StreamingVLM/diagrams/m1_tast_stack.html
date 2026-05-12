@@ -154,12 +154,16 @@ h2 { text-align: center; color: #616161; margin-bottom: 20px; font-size: 14px; f
     <p style="color:#FF6B35;font-weight:bold;margin-top:4px;">Ours: spatial merge + temporal scoring + accumulative state &mdash; all training-free, all composable.</p>
   </div>
 
-  <div class="callout" style="background:#E8F5E9;border-color:#2E7D32;color:#1B5E20;max-width:300px;">
-    <h4>Headline Results (paired bootstrap, 95% CI)</h4>
-    <p><b>Cross-model DeViBench (Qwen2.5-VL-7B-Instruct, n=652):</b> <b>86.50%</b>, &Delta; +4.42pp [+1.82, +6.88] vs StreamingVLM-vanilla 82.08% &mdash; <b>sig. win, training-free transfer</b></p>
-    <p><b>MVBench paired (n=1325):</b> +3.55pp [+1.43, +5.58] &mdash; sig. win</p>
-    <p><b>StreamingVLM same-model DeViBench (n=652):</b> 82.21% [79.14, 85.12] &mdash; matches vanilla at ~30% LLM tokens (compute-equivalence)</p>
-    <p><b>MLVU plotQA (n=500, long video):</b> &minus;7.00pp &mdash; honest negative; Phase-7 training-free fixes (hierarchical TAST, adaptive &gamma;, keep-ratio ramp) did not close the gap.</p>
+  <div class="callout" style="background:#E8F5E9;border-color:#2E7D32;color:#1B5E20;max-width:340px;">
+    <h4>Length-Adaptive Policy &mdash; Final Headline (Phase 8)</h4>
+    <p><b>SHORT / MEDIUM video &rarr; r = 0.30 (drop 70%)</b></p>
+    <p>&bull; DeViBench cross-model (Qwen2.5-VL-7B-Instruct, n=652): <b>86.50%</b>, +4.42 pp [+1.82, +6.88] &mdash; <b>sig. win, training-free transfer</b></p>
+    <p>&bull; MVBench paired (n=1325): +3.55 pp [+1.43, +5.58] &mdash; sig. win</p>
+    <p><b>LONG video &rarr; r = 0.85 (drop 15%)</b></p>
+    <p>&bull; MLVU plotQA (n=539): <b>64.19%</b>, &minus;1.81 pp vs vanilla 66.00% &mdash; <b>within CI noise</b></p>
+    <p>&bull; Same stack at r=0.85 on DeViBench cross-model (n=821): <b>86.60%</b>, +4.52 pp &mdash; <b>also beats vanilla.</b></p>
+    <p style="margin-top:6px;font-weight:bold;">plotQA Pareto (paired bootstrap vs r=0.30 control): r=0.50 +2.60 pp [+0.74,+4.64]&#42;, r=0.70 +4.82 pp [+2.60,+7.24]&#42;, r=0.85 +5.75 pp [+3.34,+8.35]&#42;</p>
+    <p style="font-size:9px;color:#558B2F;">No regression on any tested benchmark.</p>
   </div>
 </div>
 

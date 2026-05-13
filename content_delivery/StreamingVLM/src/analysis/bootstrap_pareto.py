@@ -1,112 +1,71 @@
 """
-Bootstrap 95% CI for the plotQA Pareto curve.
-
-For each result JSON, compute per-sample correctness vector, then resample
-with replacement B=10000 times to get a 95% CI on accuracy.
-
-Also computes PAIRED bootstrap CI on (r=X stack vs r=0.30 control) and
-(r=X stack vs vanilla) since the samples are matched across configs.
+Final paired-bootstrap CI table for the Phase-8 length-adaptive r paper claim.
+Adds adaptive policies + true vanilla to the earlier Pareto.
 """
-
-import json
-import random
-import sys
-
+import json, random
 random.seed(42)
 
 FILES = {
-    'vanilla (r=1.00)': 'mlvu_baseline.json',
+    'vanilla (r=1.00)': 'mlvu_p8_truevanilla_plotqa_n539.json',
     'r=0.30 (control)': 'mlvu_stamptemporal_r0.3__c5_merge_multi7152331_tast32g0.1__n539_phase7control.json',
-    'r=0.50': 'mlvu_stamptemporal_r0.5__c5_merge_multi7152331_tast32g0.1.json',
-    'r=0.70': 'mlvu_stamptemporal_r0.7__c5_merge_multi7152331_tast32g0.1.json',
-    'r=0.85': 'mlvu_p8_path1_r085_n539.json',
+    'r=0.50 (fixed)': 'mlvu_stamptemporal_r0.5__c5_merge_multi7152331_tast32g0.1.json',
+    'r=0.70 (fixed)': 'mlvu_stamptemporal_r0.7__c5_merge_multi7152331_tast32g0.1.json',
+    'r=0.85 (fixed)': 'mlvu_p8_path1_r085_n539.json',
+    'adaptive continuous': 'mlvu_stamptemporal_r0.3__c5_merge_multi7152331_tast32g0.1_rpol_length_adaptive_rmin0.3_rmax0.85_dthr300.0.json',
+    'adaptive hard threshold': 'mlvu_stamptemporal_r0.3__c5_merge_multi7152331_tast32g0.1_rpol_length_adaptive_hard_rmin0.3_rmax0.85_dthr300.0.json',
 }
 
-def load_correct_vec(path):
-    """Return ordered list of 1/0 correctness per sample, keyed by (video, question)."""
+def load(path):
     d = json.load(open(path))
-    results = d.get('results', d) if isinstance(d, dict) else d
     out = {}
-    for r in results:
-        if not isinstance(r, dict) or 'correct' not in r:
-            continue
-        k = (r.get('video', ''), r.get('question', ''))
-        out[k] = 1 if r['correct'] else 0
+    for r in d.get('results', d) if isinstance(d, dict) else d:
+        if isinstance(r, dict) and 'correct' in r:
+            out[(r['video'], r['question'])] = 1 if r['correct'] else 0
     return out
 
+vecs = {k: load(v) for k, v in FILES.items()}
+keys = sorted(set.intersection(*[set(v.keys()) for v in vecs.values()]))
+print(f"Common samples: {len(keys)} (paired)")
 
-def bootstrap_acc(vec, B=10000, ci=0.95):
-    """Resample list of 0/1 with replacement, return (point, low, high)."""
-    n = len(vec)
-    point = sum(vec) / n
-    samples = []
-    for _ in range(B):
-        s = sum(vec[random.randint(0, n - 1)] for _ in range(n))
-        samples.append(s / n)
-    samples.sort()
-    lo_idx = int(B * (1 - ci) / 2)
-    hi_idx = int(B * (1 - (1 - ci) / 2))
-    return point, samples[lo_idx], samples[hi_idx]
-
-
-def bootstrap_paired_delta(vec_a, vec_b, B=10000, ci=0.95):
-    """Paired bootstrap on per-sample (a_i, b_i) — return point delta + CI."""
-    pairs = list(zip(vec_a, vec_b))
+def bs_paired(a, b, B=10000):
+    pairs = list(zip(a, b))
     n = len(pairs)
-    point = (sum(a for a, _ in pairs) - sum(b for _, b in pairs)) / n
-    samples = []
+    point = (sum(x for x, _ in pairs) - sum(y for _, y in pairs)) / n
+    s = []
     for _ in range(B):
-        idxs = [random.randint(0, n - 1) for _ in range(n)]
-        a_acc = sum(pairs[i][0] for i in idxs) / n
-        b_acc = sum(pairs[i][1] for i in idxs) / n
-        samples.append(a_acc - b_acc)
-    samples.sort()
-    lo_idx = int(B * (1 - ci) / 2)
-    hi_idx = int(B * (1 - (1 - ci) / 2))
-    return point, samples[lo_idx], samples[hi_idx]
+        idx = [random.randint(0, n - 1) for _ in range(n)]
+        a_acc = sum(pairs[i][0] for i in idx) / n
+        b_acc = sum(pairs[i][1] for i in idx) / n
+        s.append(a_acc - b_acc)
+    s.sort()
+    return point, s[int(B * 0.025)], s[int(B * 0.975)]
 
-
-print("=" * 80)
-print("plotQA Pareto bootstrap CI (n=539, B=10000, paired by (video,question))")
-print("=" * 80)
-
-vecs = {}
-keys_union = None
-for label, fname in FILES.items():
-    d = load_correct_vec(fname)
-    vecs[label] = d
-    if keys_union is None:
-        keys_union = set(d.keys())
-    else:
-        keys_union &= set(d.keys())
-
-print(f"\nCommon samples across all 5 result files: {len(keys_union)}")
-ordered_keys = sorted(keys_union)
-
+print()
+print("Absolute accuracies on paired n=" + str(len(keys)) + ":")
 for label in FILES:
-    raw = vecs[label]
-    aligned = [raw[k] for k in ordered_keys]
-    point, lo, hi = bootstrap_acc(aligned)
-    print(f"  {label:<22} {point*100:6.2f}%  CI95 [{lo*100:.2f}, {hi*100:.2f}]  ({100*(hi-lo)/2:+.2f} half-width)")
+    a = [vecs[label][k] for k in keys]
+    acc = sum(a) / len(a) * 100
+    print(f"  {label:<26} {acc:6.2f}%")
 
 print()
-print("=" * 80)
-print("Paired deltas vs r=0.30 control (positive = better than control)")
-print("=" * 80)
-ctrl = [vecs['r=0.30 (control)'][k] for k in ordered_keys]
-for label in ['r=0.50', 'r=0.70', 'r=0.85', 'vanilla (r=1.00)']:
-    a = [vecs[label][k] for k in ordered_keys]
-    d, lo, hi = bootstrap_paired_delta(a, ctrl)
+print("Paired Δ vs r=0.30 control (paper benchmark vs r=0.30 baseline):")
+ctrl = [vecs['r=0.30 (control)'][k] for k in keys]
+for label in ['r=0.50 (fixed)', 'r=0.70 (fixed)', 'r=0.85 (fixed)', 'adaptive continuous', 'adaptive hard threshold', 'vanilla (r=1.00)']:
+    a = [vecs[label][k] for k in keys]
+    d, lo, hi = bs_paired(a, ctrl)
     sig = "**" if (lo > 0 or hi < 0) else "  "
-    print(f"  {label:<22} Δ={d*100:+6.2f} pp  CI95 [{lo*100:+.2f}, {hi*100:+.2f}]  {sig}")
+    print(f"  {label:<26} Δ={d*100:+6.2f} pp  [{lo*100:+.2f}, {hi*100:+.2f}]  {sig}")
 
 print()
-print("=" * 80)
-print("Paired deltas vs vanilla r=1.00 (negative = pruning regression)")
-print("=" * 80)
-van = [vecs['vanilla (r=1.00)'][k] for k in ordered_keys]
-for label in ['r=0.30 (control)', 'r=0.50', 'r=0.70', 'r=0.85']:
-    a = [vecs[label][k] for k in ordered_keys]
-    d, lo, hi = bootstrap_paired_delta(a, van)
-    sig = "**" if (lo > 0 or hi < 0) else "  "
-    print(f"  {label:<22} Δ={d*100:+6.2f} pp  CI95 [{lo*100:+.2f}, {hi*100:+.2f}]  {sig}")
+print("Paired Δ vs vanilla r=1.00 (how close are we to the unpruned ceiling?):")
+van = [vecs['vanilla (r=1.00)'][k] for k in keys]
+for label in ['r=0.30 (control)', 'r=0.50 (fixed)', 'r=0.70 (fixed)', 'r=0.85 (fixed)', 'adaptive continuous', 'adaptive hard threshold']:
+    a = [vecs[label][k] for k in keys]
+    d, lo, hi = bs_paired(a, van)
+    if lo <= 0 <= hi:
+        verdict = "in noise (within CI of vanilla)"
+    elif hi < 0:
+        verdict = "sig. LOWER than vanilla"
+    else:
+        verdict = "sig. HIGHER than vanilla"
+    print(f"  {label:<26} Δ={d*100:+6.2f} pp  [{lo*100:+.2f}, {hi*100:+.2f}]  {verdict}")
